@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            text-align: center;
+        }
+        #login-container, #chat-container {
+            max-width: 400px;
+            margin: auto;
+            padding: 20px;
+            border: 1px solid #ccc;
+            border-radius: 10px;
+            background: #f9f9f9;
+        }
+        input, button {
+            margin: 10px;
+            padding: 10px;
+            width: 80%;
+        }
+        #chat-container {
+            display: none;
+        }
+        #chat-box {
+            width: 100%;
+            height: 300px;
+            border: 1px solid #ccc;
+            overflow-y: scroll;
+            margin-bottom: 10px;
+            padding: 10px;
+            background-color: #fff;
+        }
+    </style>
+</head>
+<body>
+<div id="login-container">
+    <h1>Login</h1>
+    <input type="text" id="username" placeholder="Enter Username">
+    <input type="password" id="password" placeholder="Enter Password">
+    <button id="login">Login</button>
+</div>
+
+<div id="chat-container">
+    <h1>Chat WebSocket Client</h1>
+    <label for="receiverID">Receiver ID:</label>
+    <input type="text" id="receiverID" placeholder="Enter Receiver ID">
+    <button id="connect">Connect</button>
+
+    <div id="chat-box"></div>
+
+    <input type="text" id="message" placeholder="Enter your message">
+    <button id="send">Send</button>
+</div>
+
+<script>
+    let token;
+    let socket;
+
+    document.getElementById('login').addEventListener('click', async () => {
+        const username = document.getElementById('username').value;
+        const password = document.getElementById('password').value;
+
+        const response = await fetch('http://localhost:8080/login', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ username, password })
+        });
+
+        if (response.ok) {
+            const data = await response.json();
+            token = data.token;
+            document.getElementById('login-container').style.display = 'none';
+            document.getElementById('chat-container').style.display = 'block';
+        } else {
+            alert('Login failed');
+        }
+    });
+
+    document.getElementById('connect').addEventListener('click', () => {
+        const receiverID = document.getElementById('receiverID').value;
+        if (!receiverID || !token) {
+            alert('Please enter Receiver ID, Sender ID and login first.');
+            return;
+        }
+
+        const wsUrl = `ws://localhost:8080/chat?token=${token}&receiverID=${receiverID}`;
+        socket = new WebSocket(wsUrl);
+
+        socket.onopen = () => {
+            document.getElementById('chat-box').innerHTML += '<div><strong>Connected to the chat.</strong></div>';
+
+        };
+
+        socket.onmessage = (event) => {
+            const message = JSON.parse(event.data);
+            const chatBox = document.getElementById('chat-box');
+            chatBox.innerHTML += `<div><strong>${message.username}:</strong> ${message.text}</div>`;
+            chatBox.scrollTop = chatBox.scrollHeight;
+        };
+
+        socket.onerror = (error) => {
+            console.error('WebSocket error:', error);
+        };
+
+        socket.onclose = () => {
+            document.getElementById('chat-box').innerHTML += '<div><strong>Disconnected from the chat.</strong></div>';
+        };
+    });
+
+    document.getElementById('send').addEventListener('click', () => {
+        const messageInput = document.getElementById('message');
+        const message = messageInput.value;
+
+        if (!message || !socket || socket.readyState !== WebSocket.OPEN) {
+            alert('Cannot send message. Either not connected or message is empty.');
+            return;
+        }
+
+        const msgData = { text: message };
+        socket.send(JSON.stringify(msgData));
+
+        document.getElementById('chat-box').innerHTML += `<div><strong>You:</strong> ${message}</div>`;
+        document.getElementById('chat-box').scrollTop = document.getElementById('chat-box').scrollHeight;
+        messageInput.value = '';
+    });
+</script>
+</body>
+</html>
